@@ -97,3 +97,11 @@ Cơ chế Chess.com được ghi riêng vì cần mô tả chi tiết luồng Go
 
 - [CHESS_NO_TRIAL.md](CHESS_NO_TRIAL.md)
 
+---
+
+### 4. Ứng dụng Grok (`ai.x.grok`)
+
+Kết quả kiểm tra Product ID, giá TRY, khuyến mãi 50% tháng đầu và eligibility của Google Play được ghi riêng tại:
+
+- [GROK_SUBS_OFFERS.md](GROK_SUBS_OFFERS.md)
+
