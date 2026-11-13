@@ -65,7 +65,5 @@ File EXE, database thiết bị và các bản backup không được commit vì
 
 Nếu đổi tài khoản Google, cập nhật Play Store hoặc Play Billing tạo cache key mới, hãy chạy lại nút Chess.
 
-## Phạm vi an toàn
 
-Cơ chế Chess chỉ chọn base plan có sẵn để thanh toán đủ giá. Nó không tạo giao dịch giả, không sửa giá, không sửa offer token, không cấp quyền Premium và không tự xác nhận thanh toán.
 
