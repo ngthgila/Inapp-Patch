@@ -231,3 +231,22 @@ TRY FOR ₫0.00
 Google Play Billing vẫn chưa được gọi. Sau kiểm tra, course đã được chuyển lại `DUOLINGO_ZH-CN_VI` như ban đầu.
 
 Kết luận cập nhật: màn hình giới thiệu Max và timeline trial không chứng minh tài khoản có thể mua Max. Điều kiện quyết định cuối cùng vẫn là server catalog phải chứa package `type: "gold"`. Tài khoản thứ hai cũng không có package này, nhiều khả năng do cohort/eligibility hoặc lịch sử subscription của chính tài khoản, không phải do thiết bị thiếu SKU và cũng không phải do khóa học hiện tại.
+
+## Kiểm tra tĩnh activity preview dài hơn
+
+Không gọi thêm activity preview vì lần gọi onboarding Max trước đã tạo entitlement thật trên server. Thay vào đó, APK/DEX bản `6.105.2` được kiểm tra tĩnh.
+
+Các product immersive nội bộ tìm thấy:
+
+```text
+com.duolingo.immersive_free_trial_subscription
+com.duolingo.immersive_free_trial_family_subscription
+com.duolingo.immersive_extended_free_trial_subscription
+com.duolingo.immersive_gold_free_trial_family_subscription
+```
+
+Chỉ product cuối chứa `gold` và được dùng bởi preview Max Family đã quan sát; server cấp đúng 72 giờ. Không tìm thấy product preview Max/Gold thứ hai có thời hạn dài hơn.
+
+APK có `ExtendedImmersiveForTopLearnersActivity`. DEX xác nhận activity này mua product `com.duolingo.immersive_extended_free_trial_subscription`, tracking type `immersive_super_extended`. UI lấy số ngày từ state server/runtime và dùng mặc định `21` với chuỗi `You're a top learner ... enjoy <num> day of Super on us`.
+
+Vì vậy activity dài hơn là preview **Super 21 ngày**, không phải Max. Nó còn phụ thuộc eligibility “top learner” và có thể tạo entitlement server nếu được kích hoạt; không được gọi trực tiếp để tránh làm thay đổi tài khoản hoặc khóa tiếp checkout. Thời hạn không phải tham số Intent có thể tự đặt.
