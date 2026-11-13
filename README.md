@@ -13,7 +13,10 @@ Kết quả đã kiểm tra trên thiết bị thử nghiệm:
 - Không còn `Try for PHP 0.00`.
 - Không tự bấm nút mua hoặc xác nhận giao dịch.
 
-Chi tiết kỹ thuật, quy trình backup, xác minh và rollback: [docs/CHESS_NO_TRIAL.md](docs/CHESS_NO_TRIAL.md).
+Tài liệu kỹ thuật:
+
+- Tổng hợp cơ chế Picsart và Grammarly: [docs/IMPLEMENTATION_NOTES.md](docs/IMPLEMENTATION_NOTES.md).
+- Chess.com, quy trình backup, xác minh và rollback: [docs/CHESS_NO_TRIAL.md](docs/CHESS_NO_TRIAL.md).
 
 ## Yêu cầu
 
