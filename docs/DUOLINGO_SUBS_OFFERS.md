@@ -194,3 +194,40 @@ Deep link nội bộ `duolingo://purchase_max` cũng không khắc phục đư�
 4. Chỉ khi cả hai điều kiện trên đúng mới mở flow Max và dừng trước bước xác nhận thanh toán để đối chiếu đúng product ID/giá.
 
 Nếu cần mua ngay, phương án hợp lệ là dùng một tài khoản Duolingo khác đủ eligibility hoặc nhờ Duolingo Support gỡ preview nội bộ khỏi tài khoản. Không có thao tác local nào hủy được entitlement server này.
+
+## Kiểm tra tài khoản thứ hai ngày 2026-11-13
+
+Tài khoản thứ hai không có Plus đang hoạt động (`hasPlus: false`) và không bị preview Max Family 72 giờ của tài khoản đầu tiên. Tuy nhiên tài khoản này có dấu vết một gói Family Super nội bộ cũ trong `subscriptionConfigs`:
+
+```text
+productId: com.duolingo.immersive_free_trial_family_subscription
+renewer: IMMERSIVE_PLUS
+```
+
+Catalog server mới tạo cho tài khoản gồm:
+
+```text
+super.wbt7noft.1m.26q2litertr.1699   type=premium
+super.wbt7.12m.26q2litertr.11999     type=premium
+lite.wbt7.12m.26q2litertr.3599       type=lite
+super.wbt7fp.12m.26q3fp.16799        type=premium, family=true
+```
+
+Không có package `type: "gold"`. Tiền tố `wbt7` có khả năng là cohort win-back trial 7 ngày; đây là suy luận từ tên product, không phải tên experiment được server công khai.
+
+### Loại trừ nguyên nhân do khóa học
+
+Ban đầu tài khoản dùng `DUOLINGO_ZH-CN_VI`. Tài khoản cũng đã có sẵn `DUOLINGO_ES_EN`, nên đã chuyển tạm sang khóa học Tây Ban Nha từ tiếng Anh mà không thêm khóa học mới. Server tạo catalog riêng cho `VN/DUOLINGO_ES_EN`, nhưng danh sách package vẫn giống hệt: chỉ `premium`/`lite`, không có `gold`.
+
+Luồng thực tế trên khóa học tiếng Anh nguồn:
+
+```text
+TRY FOR ₫0.00
+→ GET DUOLINGO MAX
+→ START MY FREE WEEK
+→ Get started with Super today / GET SUPER
+```
+
+Google Play Billing vẫn chưa được gọi. Sau kiểm tra, course đã được chuyển lại `DUOLINGO_ZH-CN_VI` như ban đầu.
+
+Kết luận cập nhật: màn hình giới thiệu Max và timeline trial không chứng minh tài khoản có thể mua Max. Điều kiện quyết định cuối cùng vẫn là server catalog phải chứa package `type: "gold"`. Tài khoản thứ hai cũng không có package này, nhiều khả năng do cohort/eligibility hoặc lịch sử subscription của chính tài khoản, không phải do thiết bị thiếu SKU và cũng không phải do khóa học hiện tại.
