@@ -30,6 +30,7 @@ Tài liệu kỹ thuật:
 
 - Tổng hợp cơ chế Picsart và Grammarly: [docs/IMPLEMENTATION_NOTES.md](docs/IMPLEMENTATION_NOTES.md).
 - Chess.com, quy trình backup, xác minh và rollback: [docs/CHESS_NO_TRIAL.md](docs/CHESS_NO_TRIAL.md).
+- Duolingo, bảng SKU/offer và lớp eligibility Max: [docs/DUOLINGO_SUBS_OFFERS.md](docs/DUOLINGO_SUBS_OFFERS.md).
 
 ## Yêu cầu
 
