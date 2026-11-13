@@ -1,6 +1,19 @@
 # Inapp Patch
 
-Công cụ WinForms/ADB hỗ trợ kiểm tra và điều chỉnh cấu hình paywall cục bộ trên thiết bị Android đã root. Bản hiện tại có các thao tác cho Picsart, Grammarly và Chess.com.
+Công cụ WinForms/ADB hỗ trợ kiểm tra và điều chỉnh cấu hình paywall cục bộ trên thiết bị Android đã root. Bản hiện tại có các thao tác cho Picsart, Grammarly, Chess.com và trình quét offer Google Play chỉ đọc.
+
+## Quét mọi offer Google Play
+
+Nút **`Google Play: Quét mọi Offer`** đọc cache ProductDetails của package do người dùng nhập (mặc định `com.openai.chatgpt`) và hiển thị:
+
+- Product ID, base plan ID và offer ID.
+- Mọi pricing phase, giá bản địa hóa, loại tiền, chu kỳ và kiểu lặp.
+- Offer tags như `rc-ignore-offer`.
+- Thời điểm hết hạn của bản cache.
+
+Kết quả được lưu thành CSV trong `%LOCALAPPDATA%\PicsartResetTool\Reports\Offers`. Trình quét không xuất tài khoản Google, `offerIdToken` hay `skuDetailsToken`, đồng thời không sửa database và không kích hoạt offer.
+
+Trước khi quét, hãy mở ứng dụng đích và paywall ít nhất một lần để Google Play tải ProductDetails. Tài liệu kỹ thuật: [docs/GOOGLE_PLAY_OFFER_SCANNER.md](docs/GOOGLE_PLAY_OFFER_SCANNER.md).
 
 ## Chess.com: bỏ trial và mua thẳng
 
@@ -35,6 +48,7 @@ $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 & $csc /nologo /target:winexe /out:PicsartToolGUI.exe `
   /reference:System.Windows.Forms.dll `
   /reference:System.Drawing.dll `
+  /reference:System.Web.Extensions.dll `
   PicsartToolGUI.cs
 ```
 

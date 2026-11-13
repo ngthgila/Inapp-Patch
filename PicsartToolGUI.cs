@@ -1,12 +1,15 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Web.Script.Serialization;
 
 namespace PicsartResetTool
 {
@@ -19,6 +22,23 @@ namespace PicsartResetTool
         public string PlanType { get; set; }
         public string Credits { get; set; }
         public string LastResult { get; set; }
+    }
+
+    public class BillingOfferInfo
+    {
+        public string Serial { get; set; }
+        public string PackageName { get; set; }
+        public string ProductType { get; set; }
+        public string ProductId { get; set; }
+        public string BasePlanId { get; set; }
+        public string OfferId { get; set; }
+        public string OfferTags { get; set; }
+        public int Phase { get; set; }
+        public string Price { get; set; }
+        public string Currency { get; set; }
+        public string BillingPeriod { get; set; }
+        public string Recurrence { get; set; }
+        public string CacheExpires { get; set; }
     }
 
     public class MainForm : Form
@@ -34,6 +54,7 @@ namespace PicsartResetTool
         private Button btnForceUltra;
         private Button btnGrammarlyNoTrial;
         private Button btnChessNoTrial;
+        private Button btnScanOffers;
         private Button btnFullReset;
         private Label lblStatus;
         private bool allSelected = true;
@@ -42,8 +63,8 @@ namespace PicsartResetTool
 
         public MainForm()
         {
-            Text = "Picsart, Grammarly & Chess Multi-Device Tool v2.5";
-            Size = new Size(1380, 720);
+            Text = "Inapp Patch Multi-Device Tool v2.6";
+            Size = new Size(1380, 770);
             MinimumSize = new Size(1180, 600);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
@@ -58,7 +79,7 @@ namespace PicsartResetTool
             Panel topPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 112,
+                Height = 160,
                 Padding = new Padding(10, 8, 10, 8),
                 BackColor = Color.White
             };
@@ -116,10 +137,14 @@ namespace PicsartResetTool
                 }
             };
 
+            btnScanOffers = CreateButton("🔎 Google Play: Quét mọi Offer", Color.FromArgb(14, 116, 144), Color.White, 285);
+            btnScanOffers.Location = new Point(12, 106);
+            btnScanOffers.Click += async (s, e) => await ScanOffersOnSelectedAsync();
+
             topPanel.Controls.AddRange(new Control[]
             {
                 btnRefresh, btnSelectAll, btnKeepFix, btnOpenPaywall, btnForcePlus, btnForceMonthly,
-                btnForceUltra, btnGrammarlyNoTrial, btnFullReset, btnChessNoTrial
+                btnForceUltra, btnGrammarlyNoTrial, btnFullReset, btnChessNoTrial, btnScanOffers
             });
 
             Panel bottomStatusPanel = new Panel
@@ -133,7 +158,7 @@ namespace PicsartResetTool
             {
                 Dock = DockStyle.Fill,
                 ForeColor = Color.White,
-                Text = "Sẵn sàng (v2.5: Picsart + Grammarly + Chess.com mua thẳng không qua trial).",
+                Text = "Sẵn sàng (v2.6: thêm trình quét offer Google Play chỉ đọc).",
                 TextAlign = ContentAlignment.MiddleLeft
             };
             bottomStatusPanel.Controls.Add(lblStatus);
@@ -379,6 +404,7 @@ namespace PicsartResetTool
             btnForceUltra.Enabled = enabled;
             btnGrammarlyNoTrial.Enabled = enabled;
             btnChessNoTrial.Enabled = enabled;
+            btnScanOffers.Enabled = enabled;
             btnFullReset.Enabled = enabled;
         }
 
@@ -428,6 +454,525 @@ namespace PicsartResetTool
             catch (Exception ex)
             {
                 return "ERR: " + ex.Message;
+            }
+        }
+
+        private string PromptForPackageName()
+        {
+            using (Form prompt = new Form())
+            using (Label label = new Label())
+            using (TextBox input = new TextBox())
+            using (Button ok = new Button())
+            using (Button cancel = new Button())
+            {
+                prompt.Text = "Quét offer Google Play";
+                prompt.ClientSize = new Size(520, 145);
+                prompt.StartPosition = FormStartPosition.CenterParent;
+                prompt.FormBorderStyle = FormBorderStyle.FixedDialog;
+                prompt.MaximizeBox = false;
+                prompt.MinimizeBox = false;
+
+                label.Text = "Package ứng dụng (ví dụ: com.openai.chatgpt):";
+                label.Location = new Point(18, 16);
+                label.AutoSize = true;
+
+                input.Text = "com.openai.chatgpt";
+                input.Location = new Point(20, 43);
+                input.Width = 478;
+
+                ok.Text = "Quét offer";
+                ok.DialogResult = DialogResult.OK;
+                ok.Location = new Point(318, 92);
+                ok.Width = 85;
+
+                cancel.Text = "Hủy";
+                cancel.DialogResult = DialogResult.Cancel;
+                cancel.Location = new Point(413, 92);
+                cancel.Width = 85;
+
+                prompt.Controls.AddRange(new Control[] { label, input, ok, cancel });
+                prompt.AcceptButton = ok;
+                prompt.CancelButton = cancel;
+
+                if (prompt.ShowDialog(this) != DialogResult.OK)
+                {
+                    return null;
+                }
+
+                string packageName = input.Text.Trim();
+                if (!Regex.IsMatch(packageName, @"^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$"))
+                {
+                    MessageBox.Show(
+                        "Package không hợp lệ. Chỉ dùng chữ, số, dấu gạch dưới và dấu chấm.",
+                        "Package không hợp lệ",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return null;
+                }
+                return packageName;
+            }
+        }
+
+        private List<string> GetSelectedSerials()
+        {
+            List<string> selected = new List<string>();
+            foreach (DataGridViewRow row in grid.Rows)
+            {
+                bool isChecked = row.Cells["Selected"].Value != null && (bool)row.Cells["Selected"].Value;
+                if (isChecked && row.Cells["Serial"].Value != null)
+                {
+                    selected.Add(row.Cells["Serial"].Value.ToString());
+                }
+            }
+            return selected;
+        }
+
+        private static string HexToUtf8(string hex)
+        {
+            if (string.IsNullOrEmpty(hex) || (hex.Length % 2) != 0)
+            {
+                return string.Empty;
+            }
+            byte[] bytes = new byte[hex.Length / 2];
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+            }
+            return Encoding.UTF8.GetString(bytes);
+        }
+
+        private static string ExtractFirstJsonObject(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return null;
+            int start = text.IndexOf('{');
+            if (start < 0) return null;
+
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+            for (int i = start; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (c == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (c == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (c == '"') inString = true;
+                else if (c == '{') depth++;
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return text.Substring(start, i - start + 1);
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static Dictionary<string, object> AsDictionary(object value)
+        {
+            return value as Dictionary<string, object>;
+        }
+
+        private static IEnumerable<object> AsItems(object value)
+        {
+            if (value == null) yield break;
+            object[] array = value as object[];
+            if (array != null)
+            {
+                foreach (object item in array) yield return item;
+                yield break;
+            }
+            ArrayList list = value as ArrayList;
+            if (list != null)
+            {
+                foreach (object item in list) yield return item;
+                yield break;
+            }
+            yield return value;
+        }
+
+        private static string JsonString(Dictionary<string, object> data, string key, string fallback = "")
+        {
+            object value;
+            if (data != null && data.TryGetValue(key, out value) && value != null)
+            {
+                return Convert.ToString(value);
+            }
+            return fallback;
+        }
+
+        private static int JsonInt(Dictionary<string, object> data, string key)
+        {
+            object value;
+            int result;
+            if (data != null && data.TryGetValue(key, out value) && value != null &&
+                int.TryParse(Convert.ToString(value), out result))
+            {
+                return result;
+            }
+            return 0;
+        }
+
+        private static string JsonTags(Dictionary<string, object> data)
+        {
+            object value;
+            if (data == null || !data.TryGetValue("offerTags", out value) || value == null)
+            {
+                return string.Empty;
+            }
+            return string.Join(", ", AsItems(value).Select(Convert.ToString).Where(s => !string.IsNullOrEmpty(s)).ToArray());
+        }
+
+        private static string RecurrenceText(Dictionary<string, object> phase)
+        {
+            int mode = JsonInt(phase, "recurrenceMode");
+            int cycles = JsonInt(phase, "billingCycleCount");
+            if (mode == 1) return "Lặp vô hạn";
+            if (mode == 2) return cycles > 0 ? "Lặp " + cycles + " kỳ" : "Lặp hữu hạn";
+            if (mode == 3) return "Một lần";
+            return mode == 0 ? string.Empty : "Mode " + mode;
+        }
+
+        private static string CacheExpirationText(string milliseconds)
+        {
+            long value;
+            if (!long.TryParse(milliseconds, out value) || value <= 0) return string.Empty;
+            try
+            {
+                DateTime utc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(value);
+                return utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            catch
+            {
+                return milliseconds;
+            }
+        }
+
+        private static void AddSubscriptionOffers(
+            List<BillingOfferInfo> result,
+            Dictionary<string, object> product,
+            string serial,
+            string packageName,
+            string cacheExpires)
+        {
+            object offersValue;
+            if (!product.TryGetValue("subscriptionOfferDetails", out offersValue) || offersValue == null)
+            {
+                return;
+            }
+
+            foreach (object offerObject in AsItems(offersValue))
+            {
+                Dictionary<string, object> offer = AsDictionary(offerObject);
+                if (offer == null) continue;
+                string basePlanId = JsonString(offer, "basePlanId");
+                string offerId = JsonString(offer, "offerId", "(base plan)");
+                if (string.IsNullOrEmpty(offerId)) offerId = "(base plan)";
+                string tags = JsonTags(offer);
+
+                object phasesValue;
+                List<object> phases = offer.TryGetValue("pricingPhases", out phasesValue)
+                    ? AsItems(phasesValue).ToList()
+                    : new List<object>();
+                if (phases.Count == 0) phases.Add(null);
+
+                for (int i = 0; i < phases.Count; i++)
+                {
+                    Dictionary<string, object> phase = AsDictionary(phases[i]);
+                    result.Add(new BillingOfferInfo
+                    {
+                        Serial = serial,
+                        PackageName = packageName,
+                        ProductType = JsonString(product, "type", "subs"),
+                        ProductId = JsonString(product, "productId"),
+                        BasePlanId = basePlanId,
+                        OfferId = offerId,
+                        OfferTags = tags,
+                        Phase = i + 1,
+                        Price = JsonString(phase, "formattedPrice"),
+                        Currency = JsonString(phase, "priceCurrencyCode"),
+                        BillingPeriod = JsonString(phase, "billingPeriod"),
+                        Recurrence = RecurrenceText(phase),
+                        CacheExpires = cacheExpires
+                    });
+                }
+            }
+        }
+
+        private static void AddOneTimeOffers(
+            List<BillingOfferInfo> result,
+            Dictionary<string, object> product,
+            string serial,
+            string packageName,
+            string cacheExpires)
+        {
+            object detailsValue;
+            bool hasDetails = product.TryGetValue("oneTimePurchaseOfferDetails", out detailsValue) && detailsValue != null;
+            IEnumerable<object> details = hasDetails ? AsItems(detailsValue) : new object[] { product };
+            int index = 0;
+            foreach (object detailObject in details)
+            {
+                Dictionary<string, object> detail = AsDictionary(detailObject);
+                if (detail == null) continue;
+                string price = JsonString(detail, "formattedPrice", JsonString(detail, "price"));
+                if (string.IsNullOrEmpty(price) && !hasDetails) continue;
+                index++;
+                string offerId = JsonString(detail, "offerId", "(one-time)");
+                if (string.IsNullOrEmpty(offerId)) offerId = "(one-time)";
+                result.Add(new BillingOfferInfo
+                {
+                    Serial = serial,
+                    PackageName = packageName,
+                    ProductType = JsonString(product, "type", "inapp"),
+                    ProductId = JsonString(product, "productId"),
+                    BasePlanId = JsonString(detail, "purchaseOptionId"),
+                    OfferId = offerId,
+                    OfferTags = JsonTags(detail),
+                    Phase = index,
+                    Price = price,
+                    Currency = JsonString(detail, "priceCurrencyCode", JsonString(detail, "price_currency_code")),
+                    BillingPeriod = string.Empty,
+                    Recurrence = "Một lần",
+                    CacheExpires = cacheExpires
+                });
+            }
+        }
+
+        private List<BillingOfferInfo> ScanOffersForDevice(string serial, string packageName)
+        {
+            const string playDb = "/data/data/com.android.vending/databases/sku_details.db";
+            List<BillingOfferInfo> result = new List<BillingOfferInfo>();
+            string safeSerial = Regex.Replace(serial, @"[^A-Za-z0-9._-]", "_");
+            string scanId = Guid.NewGuid().ToString("N");
+            string localSql = Path.Combine(Path.GetTempPath(), "offer_scan_" + safeSerial + "_" + scanId + ".sql");
+            string remoteSql = "/data/local/tmp/offer_scan_" + safeSerial + "_" + scanId + ".sql";
+
+            try
+            {
+                RunAdb(string.Format("-s {0} root", serial), 5000);
+                string preflight = RunAdb(string.Format(
+                    "-s {0} shell \"test -f {1} && echo PLAY_DB_OK; command -v sqlite3\"",
+                    serial, playDb), 8000);
+                if (!preflight.Contains("PLAY_DB_OK"))
+                {
+                    throw new FileNotFoundException("Không tìm thấy sku_details.db của Google Play.");
+                }
+                if (!preflight.Contains("sqlite3"))
+                {
+                    throw new FileNotFoundException("Thiết bị không có sqlite3.");
+                }
+
+                string sql =
+                    ".bail on\n" +
+                    ".timeout 10000\n" +
+                    "SELECT hex(cache_key) || '|' || hex(cache_data) || '|' || expiration_timestamp " +
+                    "FROM cache_table WHERE cache_key LIKE '%callingPackageName=" + packageName + "#%' " +
+                    "AND (cache_key LIKE '%skuType=subs%' OR cache_key LIKE '%skuType=inapp%') " +
+                    "ORDER BY cache_key;\n";
+                File.WriteAllText(localSql, sql, new UTF8Encoding(false));
+                RunAdb(string.Format("-s {0} push \"{1}\" {2}", serial, localSql, remoteSql), 10000);
+                string output = RunAdb(string.Format(
+                    "-s {0} shell \"sqlite3 {1} < {2}; rm -f {2}\"",
+                    serial, playDb, remoteSql), 30000);
+
+                JavaScriptSerializer serializer = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
+                string[] lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (string line in lines)
+                {
+                    string[] parts = line.Split(new[] { '|' }, 3);
+                    if (parts.Length != 3) continue;
+                    string cacheText;
+                    try
+                    {
+                        cacheText = HexToUtf8(parts[1]);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                    string json = ExtractFirstJsonObject(cacheText);
+                    if (string.IsNullOrEmpty(json)) continue;
+
+                    Dictionary<string, object> product;
+                    try
+                    {
+                        product = AsDictionary(serializer.DeserializeObject(json));
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                    if (product == null) continue;
+                    string expires = CacheExpirationText(parts[2]);
+                    AddSubscriptionOffers(result, product, serial, packageName, expires);
+                    AddOneTimeOffers(result, product, serial, packageName, expires);
+                }
+
+                result = result
+                    .GroupBy(x => string.Join("\u001f", new[]
+                    {
+                        x.Serial, x.ProductType, x.ProductId, x.BasePlanId, x.OfferId,
+                        x.OfferTags, x.Phase.ToString(), x.Price, x.Currency,
+                        x.BillingPeriod, x.Recurrence
+                    }))
+                    .Select(g => g.First())
+                    .OrderBy(x => x.ProductId)
+                    .ThenBy(x => x.BasePlanId)
+                    .ThenBy(x => x.OfferId)
+                    .ThenBy(x => x.Phase)
+                    .ToList();
+
+                AppendLog(string.Format("[{0}] Tìm thấy {1} pricing phase cho {2}.", serial, result.Count, packageName));
+                UpdateRowStatus(serial, result.Count > 0 ? "🔎 Đã quét " + result.Count + " phase" : "⚠️ Chưa có cache offer");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                AppendLog(string.Format("[{0}] ❌ Lỗi quét offer: {1}", serial, ex.Message));
+                UpdateRowStatus(serial, "❌ Quét offer thất bại");
+                return result;
+            }
+            finally
+            {
+                try { RunAdb(string.Format("-s {0} shell rm -f {1}", serial, remoteSql), 3000); } catch { }
+                try { if (File.Exists(localSql)) File.Delete(localSql); } catch { }
+            }
+        }
+
+        private static string Csv(string value)
+        {
+            value = value ?? string.Empty;
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        private static string SaveOfferReport(List<BillingOfferInfo> offers, string packageName)
+        {
+            string safePackage = Regex.Replace(packageName, @"[^A-Za-z0-9._-]", "_");
+            string reportDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "PicsartResetTool", "Reports", "Offers");
+            Directory.CreateDirectory(reportDir);
+            string path = Path.Combine(reportDir, DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + safePackage + ".csv");
+            StringBuilder csv = new StringBuilder();
+            csv.AppendLine("Serial,Package,Type,ProductId,BasePlanId,OfferId,OfferTags,Phase,Price,Currency,BillingPeriod,Recurrence,CacheExpires");
+            foreach (BillingOfferInfo item in offers)
+            {
+                csv.AppendLine(string.Join(",", new[]
+                {
+                    Csv(item.Serial), Csv(item.PackageName), Csv(item.ProductType), Csv(item.ProductId),
+                    Csv(item.BasePlanId), Csv(item.OfferId), Csv(item.OfferTags), item.Phase.ToString(),
+                    Csv(item.Price), Csv(item.Currency), Csv(item.BillingPeriod), Csv(item.Recurrence),
+                    Csv(item.CacheExpires)
+                }));
+            }
+            File.WriteAllText(path, csv.ToString(), new UTF8Encoding(true));
+            return path;
+        }
+
+        private void ShowOfferResults(List<BillingOfferInfo> offers, string packageName, string reportPath)
+        {
+            Form form = new Form
+            {
+                Text = "Google Play Offers - " + packageName,
+                Size = new Size(1320, 680),
+                MinimumSize = new Size(950, 500),
+                StartPosition = FormStartPosition.CenterParent,
+                Font = new Font("Segoe UI", 9f)
+            };
+            Label summary = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 45,
+                Padding = new Padding(10, 7, 10, 5),
+                Text = string.Format("{0} pricing phase | Báo cáo: {1}", offers.Count, reportPath),
+                AutoEllipsis = true
+            };
+            DataGridView offerGrid = new DataGridView
+            {
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                RowHeadersVisible = false,
+                AutoGenerateColumns = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                DataSource = offers
+            };
+            Button openReport = new Button
+            {
+                Dock = DockStyle.Bottom,
+                Height = 38,
+                Text = "Mở thư mục báo cáo"
+            };
+            openReport.Click += (s, e) =>
+            {
+                try { Process.Start("explorer.exe", "/select,\"" + reportPath + "\""); }
+                catch (Exception ex) { MessageBox.Show(ex.Message, "Không mở được báo cáo"); }
+            };
+            form.Controls.Add(offerGrid);
+            form.Controls.Add(summary);
+            form.Controls.Add(openReport);
+            form.ShowDialog(this);
+        }
+
+        private async Task ScanOffersOnSelectedAsync()
+        {
+            string packageName = PromptForPackageName();
+            if (string.IsNullOrEmpty(packageName)) return;
+
+            List<string> selected = GetSelectedSerials();
+            if (selected.Count == 0)
+            {
+                MessageBox.Show("Vui lòng tích chọn ít nhất 1 thiết bị trong bảng!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            SetButtonsEnabled(false);
+            lblStatus.Text = "Đang quét offer Google Play cho " + packageName + "...";
+            AppendLog(string.Format("Bắt đầu quét chỉ đọc mọi offer của {0} trên {1} thiết bị...", packageName, selected.Count));
+            try
+            {
+                List<Task<List<BillingOfferInfo>>> tasks = selected
+                    .Select(serial => Task.Run(() => ScanOffersForDevice(serial, packageName)))
+                    .ToList();
+                List<BillingOfferInfo> offers = (await Task.WhenAll(tasks)).SelectMany(x => x).ToList();
+                if (offers.Count == 0)
+                {
+                    MessageBox.Show(
+                        "Không tìm thấy offer trong cache. Hãy mở ứng dụng và màn hình paywall một lần, chờ Google Play tải giá rồi quét lại.",
+                        "Chưa có dữ liệu offer",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    lblStatus.Text = "Không tìm thấy offer cho " + packageName + ".";
+                    return;
+                }
+
+                string reportPath = SaveOfferReport(offers, packageName);
+                int offerCount = offers.Select(x => x.Serial + "|" + x.ProductId + "|" + x.BasePlanId + "|" + x.OfferId).Distinct().Count();
+                AppendLog(string.Format("Hoàn tất: {0} offer/base plan, {1} pricing phase. CSV: {2}", offerCount, offers.Count, reportPath));
+                lblStatus.Text = string.Format("Đã quét {0} offer/base plan của {1}.", offerCount, packageName);
+                ShowOfferResults(offers, packageName, reportPath);
+            }
+            finally
+            {
+                SetButtonsEnabled(true);
             }
         }
 
