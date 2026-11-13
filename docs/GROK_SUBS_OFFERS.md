@@ -67,10 +67,3 @@ Không có offer token hợp lệ để checkout
 Khả năng cao là storefront/country hoặc điều kiện của tài khoản Google Play hiện tại không khớp catalog TRY mà Grok đang hiển thị. Đây là suy luận từ sự lệch giữa paywall và kết quả Billing; log không cho biết chính xác điều kiện nào bị thiếu. Chỉ đổi VPN hoặc ép UI hiển thị paywall không thể tự tạo eligibility ở Google Play.
 
 Muốn kiểm tra lại một cách hợp lệ, cần mở Grok bằng tài khoản Google Play có country/payment profile phù hợp với catalog mục tiêu, sau đó để app truy vấn lại ProductDetails. Chỉ khi BillingClient trả về `ProductDetails` cùng `subscriptionOfferDetails` thì offer đó mới thực sự có khả năng đi tới checkout.
-
-## Phạm vi an toàn
-
-- Chỉ đọc package/APK, quan sát paywall và log BillingClient.
-- Không sửa dữ liệu Grok hoặc Google Play.
-- Không chọn offer token, không mở/xác nhận giao dịch và không tạo entitlement.
-- Không ghi vào tài liệu account identifier, purchase token hoặc token thanh toán.
