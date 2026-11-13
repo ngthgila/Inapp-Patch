@@ -128,11 +128,11 @@ DEX có đầy đủ các context dành riêng cho Max Family:
 - `IMMERSIVE_MAX_FP_OFFER_ONBOARDING_ORIGIN`
 - `IMMERSIVE_MAX_FAMILY_PLAN_FOR_SECONDARY_SHOP`
 
-Activity `ImmersiveMaxFamilyPlanOwnerOnboardingActivity` cũng dựng được giao diện ghi rõ `Max familiar`, xác nhận bản app có tài nguyên và luồng Max Family. Tuy nhiên đây là onboarding sau mua, không phải màn hình chọn giá.
+Activity `ImmersiveMaxFamilyPlanOwnerOnboardingActivity` cũng dựng được giao diện ghi rõ `Max familiar`. Tuy nhiên không được gọi trực tiếp activity này để thử UI: kiểm tra ngày 2026-11-13 xác nhận nó có side effect tạo một preview Max Family 72 giờ trên server Duolingo, không chỉ tạo trạng thái local.
 
 Khi gọi trực tiếp `PlusPurchaseFlowActivity` với context `COMBINED_PACKAGE_PAGE_MAX_FAMILY_CARD`, app ban đầu vẫn dựng nội dung Max nhưng trước bước Google Play lại chuyển sang CTA `Get Super`. Context `IMMERSIVE_MAX_FP_OFFER_ONBOARDING_ORIGIN` cho kết quả tương tự. Không có Billing flow Max Family nào được khởi tạo.
 
-Kết luận: Max Family năm tồn tại thật trong Google Play (`max.fp.12m.2024q3max.23999` và bản trial `max.t14fp.12m.2024q3max.23999`), nhưng tài khoản hiện tại vẫn bị server/runtime eligibility hạ cấp về Super trước checkout. Chỉ ép route hoặc sửa tham số Intent là chưa đủ để mua đúng Max Family.
+Kết luận: Max Family năm tồn tại thật trong Google Play (`max.fp.12m.2024q3max.23999` và bản trial `max.t14fp.12m.2024q3max.23999`), nhưng chỉ có ProductDetails trong cache Google Play là chưa đủ. Server Duolingo phải trả một package `type: "gold"` trong `subscription_catalog.json`; nếu catalog chỉ có `premium`/`lite`, luồng Max sẽ bị hạ về Super trước checkout.
 
 ### Cờ runtime đã xác định
 
@@ -149,4 +149,48 @@ Luồng eligibility của tab Subscription được tạo từ `SubscriptionTab_
 
 ### Giới hạn an toàn của thử nghiệm
 
-Các hook runtime chỉ được dùng tạm thời để quan sát nhánh UI và đã bị gỡ bằng cách dừng tiến trình Duolingo. Không ghi đè APK, không thay ProductDetails/offer token, không tạo entitlement giả và không xác nhận giao dịch Google Play. Nút Max Family không được thêm vào GUI vì route hiện tại chưa đảm bảo chọn đúng SKU Family; tránh hiển thị một nút có thể âm thầm rơi về Super.
+Các hook runtime chỉ được dùng tạm thời để quan sát nhánh UI và đã bị gỡ bằng cách dừng tiến trình Duolingo. Không ghi đè APK, không thay ProductDetails/offer token và không xác nhận giao dịch Google Play. Nút Max Family không được thêm vào GUI vì route hiện tại chưa đảm bảo chọn đúng SKU Family; tránh hiển thị một nút có thể âm thầm rơi về Super.
+
+## Sự cố preview Max Family 72 giờ ngày 2026-11-13
+
+### Trạng thái server đã xác nhận
+
+Sau khi activity onboarding nội bộ được gọi trực tiếp, response user của Duolingo xuất hiện:
+
+- `hasPlus: true`
+- `productId: com.duolingo.immersive_gold_free_trial_family_subscription`
+- `renewer: IMMERSIVE_PLUS`
+- `itemType: immersive_gold_subscription`
+- Family owner là chính tài khoản đang đăng nhập
+- Thời hạn đúng 72 giờ: từ `2026-11-13 15:35:12` đến `2026-11-16 15:35:12` (Asia/Bangkok)
+
+Không ghi vào tài liệu public các token mời, vendor purchase ID hoặc ID tài khoản lấy từ response.
+
+File DataStore local ban đầu có cờ `immersive_max_family_plan_*`; xóa file này không hủy trạng thái vì server sẽ đồng bộ lại. Sau khi đồng bộ, app tạo lại trạng thái family plan và response user vẫn báo gói immersive Gold đang hoạt động. Vì vậy đây không phải lỗi cache có thể sửa bằng cách xóa dữ liệu local.
+
+### Vì sao Max hiện nhưng không mua được
+
+Các catalog của tài khoản tại thời điểm kiểm tra nằm ở:
+
+```text
+/data/data/com.duolingo/files/res/v2/subscription/<user_id>/<country>/<course>/subscription_catalog.json
+```
+
+Tất cả catalog đã kiểm tra cho `VN`, `XX`, `IN` và `LK` chỉ trả các package `type: "premium"` (Super) và `type: "lite"`; không có package `type: "gold"` (Max). Trong khi đó response user lại báo đang có preview `immersive_gold_subscription`. Kết quả thực tế:
+
+```text
+Max intro → Get Duolingo Max → Max feature list → Join Super today
+```
+
+Google Play Billing chưa được gọi. Lỗi xảy ra trước checkout, tại bước Duolingo chọn package từ catalog.
+
+Deep link nội bộ `duolingo://purchase_max` cũng không khắc phục được. DEX cho thấy route này được ghi nhận với context `MAX_DEEP_LINK` rồi viết lại sang `duolingo://max`. Khi preview Family đang hoạt động, thử nghiệm còn mở `SuperFamilyPlanDirectAddDialogFragment` với `is_immersive_max_family_plan=true`, không phải màn hình mua hàng.
+
+### Cách khôi phục an toàn
+
+1. Không gọi lại `ImmersiveMaxFamilyPlanOwnerOnboardingActivity` và không xóa tiếp DataStore để cố hủy preview.
+2. Chờ preview server hết hạn lúc `2026-11-16 15:35:12` (Asia/Bangkok), sau đó force-stop/mở lại app để đồng bộ user và catalog mới.
+3. Trước khi thử mua, kiểm tra response user không còn `com.duolingo.immersive_gold_free_trial_family_subscription` và catalog đã có ít nhất một package `type: "gold"`.
+4. Chỉ khi cả hai điều kiện trên đúng mới mở flow Max và dừng trước bước xác nhận thanh toán để đối chiếu đúng product ID/giá.
+
+Nếu cần mua ngay, phương án hợp lệ là dùng một tài khoản Duolingo khác đủ eligibility hoặc nhờ Duolingo Support gỡ preview nội bộ khỏi tài khoản. Không có thao tác local nào hủy được entitlement server này.
