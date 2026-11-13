@@ -104,4 +104,49 @@ Thiết bị hiện dừng ở bước thứ nhất/thứ hai: ProductDetails Ma
 
 ## Phạm vi an toàn
 
-Quá trình kiểm tra chỉ đọc database/cache và mở paywall hiện tại. Không sửa treatment, không sửa ProductDetails, không chọn offer token và không khởi tạo giao dịch.
+Giai đoạn quét ban đầu chỉ đọc database/cache và mở paywall hiện tại. Không sửa ProductDetails, không chọn offer token và không khởi tạo giao dịch.
+
+## Kiểm chứng route Max ngày 2026-11-13
+
+### Max cá nhân
+
+Duolingo khai báo deep link chính thức `duolingo://max`. Lệnh sau mở được màn hình giới thiệu Max ngay cả khi card Max đang bị ẩn trong tab Subscription:
+
+```powershell
+adb -s 21f11460800c7ece shell am start -W -a android.intent.action.VIEW -d "duolingo://max" com.duolingo
+```
+
+Màn hình đã kiểm chứng có tiêu đề `Duolingo Max is the best plan for advanced learning` và CTA thử miễn phí. Đây là route chính thức, không cần sửa APK hay giả trạng thái thuê bao.
+
+### Max Family 1 năm
+
+DEX có đầy đủ các context dành riêng cho Max Family:
+
+- `COMBINED_PACKAGE_PAGE_MAX_FAMILY_CARD`
+- `CHOOSE_A_PLAN_SETTING_MAX_FP_CARD`
+- `MAX_FAMILY_SUBSCRIPTION_UPSELL_TAB_HEADER`
+- `IMMERSIVE_MAX_FP_OFFER_ONBOARDING_ORIGIN`
+- `IMMERSIVE_MAX_FAMILY_PLAN_FOR_SECONDARY_SHOP`
+
+Activity `ImmersiveMaxFamilyPlanOwnerOnboardingActivity` cũng dựng được giao diện ghi rõ `Max familiar`, xác nhận bản app có tài nguyên và luồng Max Family. Tuy nhiên đây là onboarding sau mua, không phải màn hình chọn giá.
+
+Khi gọi trực tiếp `PlusPurchaseFlowActivity` với context `COMBINED_PACKAGE_PAGE_MAX_FAMILY_CARD`, app ban đầu vẫn dựng nội dung Max nhưng trước bước Google Play lại chuyển sang CTA `Get Super`. Context `IMMERSIVE_MAX_FP_OFFER_ONBOARDING_ORIGIN` cho kết quả tương tự. Không có Billing flow Max Family nào được khởi tạo.
+
+Kết luận: Max Family năm tồn tại thật trong Google Play (`max.fp.12m.2024q3max.23999` và bản trial `max.t14fp.12m.2024q3max.23999`), nhưng tài khoản hiện tại vẫn bị server/runtime eligibility hạ cấp về Super trước checkout. Chỉ ép route hoặc sửa tham số Intent là chưa đủ để mua đúng Max Family.
+
+### Cờ runtime đã xác định
+
+`PlusContext.isFromMaxFPPromoHook()` trả true cho sáu context sau:
+
+- `COMBINED_PACKAGE_PAGE_MAX_FAMILY_CARD`
+- `COMBINED_PACKAGE_PAGE_MAX_FAMILY_CARD_UPGRADE`
+- `MAX_FP_UPGRADE_NUDGE_NOTIFICATION`
+- `MAX_FP_UPGRADE_NUDGE_DRAWER`
+- `CHOOSE_A_PLAN_SETTING_MAX_FP_CARD`
+- `MAX_FAMILY_SUBSCRIPTION_UPSELL_TAB_HEADER`
+
+Luồng eligibility của tab Subscription được tạo từ `SubscriptionTab_MaxCardEligible` và `SubscriptionTab_MaxFamilyCardEligible`. Trong bản `6.105.2`, Max Family còn phụ thuộc đồng thời vào server flags, `userEligibleForMaxCards`, trạng thái thành viên Family, các hook Max-to-Max-Family và `shouldShowRetieredViews`.
+
+### Giới hạn an toàn của thử nghiệm
+
+Các hook runtime chỉ được dùng tạm thời để quan sát nhánh UI và đã bị gỡ bằng cách dừng tiến trình Duolingo. Không ghi đè APK, không thay ProductDetails/offer token, không tạo entitlement giả và không xác nhận giao dịch Google Play. Nút Max Family không được thêm vào GUI vì route hiện tại chưa đảm bảo chọn đúng SKU Family; tránh hiển thị một nút có thể âm thầm rơi về Super.
